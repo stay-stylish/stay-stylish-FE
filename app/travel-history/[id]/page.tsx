@@ -1,10 +1,13 @@
+// stay-stylish/stay-stylish-fe/stay-stylish-FE-c14b4b1a4b8e4c05090a39f123785ddbf08fe1b0/app/travel-history/[id]/page.tsx
+
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react" // React import 추가
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, MapPin, Calendar, Cloud } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface TravelDetailResponse {
   travelId: number
@@ -18,12 +21,13 @@ interface TravelDetailResponse {
     avgHumidity: number
     rainProbability: number
     condition: string
+    umbrellaSummary?: string // [수정] umbrellaSummary 필드 추가
   }
   culturalConstraints: {
     notes: string
     rules: string[]
   }
-  aiOutfitJson: {
+  aiOutfit: {
     summary: string
     outfits: Array<{
       setNo: number
@@ -48,8 +52,11 @@ export default function TravelDetailPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchDetail()
-  }, [])
+    if (params.id) {
+      fetchDetail();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id])
 
   const fetchDetail = async () => {
     setIsLoading(true)
@@ -59,6 +66,7 @@ export default function TravelDetailPage() {
       const token = getAccessToken()
       if (!token) {
         setError("로그인이 필요합니다")
+        router.push("/login");
         return
       }
 
@@ -74,13 +82,24 @@ export default function TravelDetailPage() {
       console.log('Response status:', response.status)
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({ error: "데이터를 불러오지 못했습니다." }))
         console.error('Error response:', errorData)
         throw new Error(errorData.error || "여행 상세 정보를 불러오는데 실패했습니다")
       }
 
       const data: TravelDetailResponse = await response.json()
       console.log('Received detail data:', data)
+      
+      if ((data as any).status && (data as any).status !== 'COMPLETED') {
+         if ((data as any).status === 'FAILED') {
+            throw new Error((data as any).errorMessage || '추천 생성에 실패했습니다.');
+         } else {
+            setError('추천 데이터가 아직 준비 중입니다. 잠시 후 다시 시도해주세요.');
+            setTimeout(() => router.back(), 5000);
+            return;
+         }
+      }
+      
       setDetail(data)
     } catch (err) {
       console.error('Fetch detail error:', err)
@@ -114,8 +133,11 @@ export default function TravelDetailPage() {
             </div>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto py-12 px-8 text-center">
-          <p className="text-slate-600">로딩 중...</p>
+        {/* Skeleton UI */}
+        <div className="max-w-7xl mx-auto py-8 px-8 space-y-6">
+          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
         </div>
       </main>
     )
@@ -186,76 +208,99 @@ export default function TravelDetailPage() {
       {/* Content */}
       <div className="max-w-7xl mx-auto py-8 px-8 space-y-6">
         {/* Weather Summary */}
-        <div className="p-6 bg-blue-50 border-2 border-blue-200 rounded-xl">
-          <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Cloud className="w-6 h-6 text-blue-500" />
-            날씨 요약
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-slate-600">평균 기온</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {Number(detail.weatherSummary.avgTemperature).toFixed(1)}°C
-              </p>
+        {detail.weatherSummary && (
+          <div className="p-6 bg-blue-50 border-2 border-blue-200 rounded-xl">
+            <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Cloud className="w-6 h-6 text-blue-500" />
+              날씨 요약
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-slate-600">평균 기온</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {Number(detail.weatherSummary.avgTemperature).toFixed(1)}°C
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-600">강수 확률</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {Number(detail.weatherSummary.rainProbability).toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-600">평균 습도</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {Number(detail.weatherSummary.avgHumidity).toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-600">날씨 상태</p>
+                <p className="text-xl font-bold text-blue-600">
+                  {detail.weatherSummary.condition}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-slate-600">강수 확률</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {Number(detail.weatherSummary.rainProbability).toFixed(1)}%
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-slate-600">평균 습도</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {Number(detail.weatherSummary.avgHumidity).toFixed(1)}%
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-slate-600">날씨 상태</p>
-              <p className="text-xl font-bold text-blue-600">
-                {detail.weatherSummary.condition}
-              </p>
-            </div>
+            
+            {/* --- [수정] 우산 요약 렌더링 --- */}
+            {detail.weatherSummary.umbrellaSummary && (
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">☔️ 우산 가이드</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {/* ' / ' 기준으로 줄바꿈 처리 */}
+                  {detail.weatherSummary.umbrellaSummary.split(' / ').map((line, index) => (
+                    <React.Fragment key={index}>
+                      {line}
+                      <br />
+                    </React.Fragment>
+                  ))}
+                </p>
+              </div>
+            )}
+            {/* --- [수정 완료] --- */}
+
           </div>
-        </div>
+        )}
 
         {/* AI Outfit Recommendation */}
-        <div className="p-6 bg-green-50 border-2 border-green-200 rounded-xl">
-          <h3 className="text-xl font-bold text-slate-900 mb-4">AI 옷차림 추천</h3>
-          <p className="text-base text-slate-700 leading-relaxed mb-6">
-            {detail.aiOutfitJson.summary}
-          </p>
+        {detail.aiOutfit && (
+          <div className="p-6 bg-green-50 border-2 border-green-200 rounded-xl">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">AI 옷차림 추천</h3>
+            
+            <p className="text-base text-slate-700 leading-relaxed mb-6">
+              {detail.aiOutfit.summary}
+            </p>
 
-          <div className="space-y-4">
-            {detail.aiOutfitJson.outfits.map((outfit) => (
-              <div
-                key={outfit.setNo}
-                className="p-4 bg-white rounded-lg border border-green-200"
-              >
-                <p className="font-bold text-slate-900 mb-2">코디 {outfit.setNo}</p>
-                <p className="text-sm text-slate-600 mb-3">{outfit.reason}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {outfit.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="text-sm p-2 bg-green-50 rounded border border-green-100"
-                    >
-                      <span className="font-semibold text-green-700">
-                        {item.slot}:
-                      </span>{" "}
-                      <span className="text-slate-700">{item.item}</span>
-                      {item.styleTag && (
-                        <span className="ml-2 text-xs text-green-600">
-                          #{item.styleTag}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+            <div className="space-y-4">
+              {detail.aiOutfit.outfits.map((outfit) => (
+                <div
+                  key={outfit.setNo}
+                  className="p-4 bg-white rounded-lg border border-green-200"
+                >
+                  <p className="font-bold text-slate-900 mb-2">코디 {outfit.setNo}</p>
+                  <p className="text-sm text-slate-600 mb-3">{outfit.reason}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {outfit.items.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="text-sm p-2 bg-green-50 rounded border border-green-100"
+                      >
+                        <span className="font-semibold text-green-700">
+                          {item.slot}:
+                        </span>{" "}
+                        <span className="text-slate-700">{item.item}</span>
+                        {item.styleTag && (
+                          <span className="ml-2 text-xs text-green-600">
+                            #{item.styleTag}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Cultural Constraints */}
         {detail.culturalConstraints && (

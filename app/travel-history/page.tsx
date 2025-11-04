@@ -1,3 +1,5 @@
+// stay-stylish/stay-stylish-fe/stay-stylish-FE-c14b4b1a4b8e4c05090a39f123785ddbf08fe1b0/app/travel-history/page.tsx
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -51,12 +53,14 @@ export default function TravelHistoryPage() {
     try {
       const token = getAccessToken()
       if (!token) {
-        setError("로그인이 필요합니다")
-        return
+        setError("로그인이 필요합니다");
+        router.push("/login"); // [추가]
+        return;
       }
 
-      console.log('Fetching travel history...')
+      console.log('Fetching travel history...');
 
+      // [수정] /api/travel/history 호출
       const response = await fetch(`/api/travel/history?page=${page}&size=10`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -65,24 +69,29 @@ export default function TravelHistoryPage() {
 
       console.log('Response status:', response.status)
 
+      // [수정] !response.ok일 때 에러 처리
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({ error: "데이터를 불러오지 못했습니다." }));
         console.error('Error response:', errorData)
         throw new Error(errorData.error || "여행 기록을 불러오는데 실패했습니다")
       }
 
-      const data: PageResponse = await response.json()
-      console.log('Received data:', data)
-      // weatherSummary가 null이거나 필수 속성이 없는 항목 필터링
-      const validHistoryItems = data.content.filter(item => 
-        item.weatherSummary && 
-        typeof item.weatherSummary.avgTemperature === 'number' &&
-        typeof item.weatherSummary.rainProbability === 'number' &&
-        item.weatherSummary.condition
-      )
+      const data: PageResponse = await response.json();
+      console.log('Received data:', data);
+
+      // [수정] 백엔드 응답이 PageResponse<T> 형태이므로 data.content 확인
+      const validHistoryItems = data.content
+        ? data.content.filter(item => 
+            item.weatherSummary && 
+            typeof item.weatherSummary.avgTemperature === 'number' &&
+            typeof item.weatherSummary.rainProbability === 'number' &&
+            item.weatherSummary.condition
+          )
+        : []; // data.content가 null이거나 undefined인 경우 빈 배열
+
       console.log('Filtered items:', validHistoryItems)
       setHistory(validHistoryItems)
-      setTotalPages(Math.max(1, Math.ceil(validHistoryItems.length / data.size)))
+      setTotalPages(data.totalPages || 0); // [수정] totalPages 사용
     } catch (err) {
       console.error('Fetch history error:', err)
       setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다")
