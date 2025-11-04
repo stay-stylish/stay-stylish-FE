@@ -1,0 +1,84 @@
+  const handleGetStyling = async () => {
+    if (!country.trim() || !city.trim() || !startDate || !endDate) {
+      setError("모든 필드를 입력해주세요");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+    setStylingData(null);
+
+    try {
+      const token = getAccessToken();
+
+      if (!token) {
+        setError("로그인이 필요합니다");
+        setIsLoading(false);
+        return;
+      }
+
+      // 1. 먼저 추천 요청을 보냅니다
+      const requestResponse = await fetch('/api/v1/travel-outfits/recommendations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          country,
+          city,
+          startDate,
+          endDate
+        })
+      });
+
+      if (!requestResponse.ok) {
+        const errorData = await requestResponse.json();
+        throw new Error(errorData.error || '여행 옷차림 추천 요청에 실패했습니다');
+      }
+
+      const { travelOutfitId } = await requestResponse.json();
+      
+      // 2. 결과가 준비될 때까지 주기적으로 확인합니다
+      let retryCount = 0;
+      const maxRetries = 60;  // 최대 60번 시도 (3분)
+      const retryInterval = 3000;  // 3초마다 확인
+
+      while (retryCount < maxRetries) {
+        const resultResponse = await fetch(`/api/v1/travel-outfits/recommendations/${travelOutfitId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!resultResponse.ok) {
+          const errorData = await resultResponse.json();
+          throw new Error(errorData.error || '여행 옷차림 추천을 가져오는데 실패했습니다');
+        }
+
+        const data = await resultResponse.json();
+        console.log('Travel styling data:', data);
+
+        // status 필드로 상태 확인 (PENDING, COMPLETED, FAILED)
+        if (data.status === 'COMPLETED') {
+          setStylingData(data);
+          break;
+        } else if (data.status === 'FAILED') {
+          throw new Error(data.errorMessage || '여행 옷차림 추천 생성에 실패했습니다');
+        }
+        
+        // PENDING 상태면 계속 대기
+        await new Promise(resolve => setTimeout(resolve, retryInterval));
+        retryCount++;
+      }
+
+      if (retryCount >= maxRetries) {
+        throw new Error('시간 초과: 여행 옷차림 추천을 가져오는데 실패했습니다');
+      }
+    } catch (err) {
+      console.error('Failed to fetch travel styling:', err);
+      setError(err instanceof Error ? err.message : '여행 옷차림 추천을 가져오는데 실패했습니다');
+    } finally {
+      setIsLoading(false);
+    }
+  };
