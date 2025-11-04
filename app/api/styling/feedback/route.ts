@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+<<<<<<< HEAD
 import { fetchWithRefresh } from "@/lib/fetch-with-refresh";
+=======
+>>>>>>> main
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,13 +24,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+<<<<<<< HEAD
     const response = await fetchWithRefresh(
+=======
+    // 서버사이드에서는 클라이언트 전용 훅(useAuth)을 사용하는 fetch 유틸을
+    // 직접 호출하면 에러가 발생합니다. 여기서는 단순히 백엔드 API로
+    // 요청을 전달하는 서버용 fetch를 사용합니다.
+    const response = await fetch(
+>>>>>>> main
       `${process.env.NEXT_PUBLIC_API_URL}/api/v1/outfits/feedback`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+<<<<<<< HEAD
           'Authorization': token
+=======
+          // 이미 클라이언트에서 전달한 Authorization 헤더(Bearer ...)를 그대로 전달
+          'Authorization': token || ''
+>>>>>>> main
         },
         body: JSON.stringify({
           categoryName,
