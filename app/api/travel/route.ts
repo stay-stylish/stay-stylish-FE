@@ -1,3 +1,5 @@
+// stay-stylish/stay-stylish-fe/stay-stylish-FE-c14b4b1a4b8e4c05090a39f123785ddbf08fe1b0/app/api/travel/route.ts
+
 import { NextResponse } from 'next/server'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'
@@ -41,8 +43,9 @@ export async function POST(request: Request) {
 
     console.log('Backend response status:', response.status)
 
+    // [수정] response.ok 확인을 .json() 호출 전에 수행
     if (!response.ok) {
-      const errorText = await response.text()
+      const errorText = await response.text(); // JSON이 아닐 수 있으므로 text()로 먼저 받음
       console.error('Backend error response:', errorText)
       
       if (response.status === 401 || response.status === 403) {
@@ -52,31 +55,38 @@ export async function POST(request: Request) {
         )
       }
 
-      throw new Error(`백엔드 응답 오류: ${response.status}`)
-    }
+      // 에러 응답이 JSON인지 시도하고, 아니면 텍스트를 사용
+      let errorMessage = `백엔드 응답 오류: ${response.status}`;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        // JSON 파싱 실패 시 errorText가 비어있지 않으면 사용
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      }
 
-    const data = await response.json()
+      return NextResponse.json(
+        { error: errorMessage },
+        { status: response.status }
+      );
+    }
+    
+    // [수정] response.ok가 확인되었으므로 안전하게 .json() 호출
+    const data = await response.json(); 
+
     console.log('Backend response data:', JSON.stringify(data, null, 2))
 
-    // stay-stylish 응답 형식: { success, message, data: TravelOutfitResponse, timestamp }
-    const travelData = data.data
+    // 백엔드가 보낸 ApiResponse를 클라이언트에 그대로 반환
+    // (데이터 형식: { success, message, data: { travelId }, timestamp })
+    return NextResponse.json(data);
 
-    return NextResponse.json({
-      travelOutfitId: travelData.travelId,
-      country: travelData.country,
-      city: travelData.city,
-      startDate: travelData.startDate,
-      endDate: travelData.endDate,
-      weatherSummary: travelData.weatherSummary,
-      culturalConstraints: travelData.culturalConstraints,
-      aiOutfit: travelData.aiOutfitJson,
-      safetyNotes: travelData.safetyNotes
-    })
   } catch (error) {
     console.error('Travel outfit API error:', error)
     
     return NextResponse.json(
-      { error: '여행 옷차림 추천을 가져오는데 실패했습니다.' },
+      { error: '여행 옷차림 추천 요청에 실패했습니다.' },
       { status: 500 }
     )
   }

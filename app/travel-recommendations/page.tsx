@@ -1,7 +1,9 @@
+// stay-stylish/stay-stylish-fe/stay-stylish-FE-c14b4b1a4b8e4c05090a39f123785ddbf08fe1b0/app/travel-recommendations/page.tsx
+
 "use client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useState } from "react"
+import { useState, useMemo } from "react" // [수정] useMemo import
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Search, ArrowLeft, Users2, User } from "lucide-react"
@@ -9,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LoadingButton } from "@/components/ui/loading-button"
 
+// (인터페이스 정의는 기존과 동일)
 interface WeatherSummary {
   avgTemperature: number
   avgHumidity: number
@@ -37,17 +40,19 @@ interface AiOutfit {
   outfits: OutfitSet[]
 }
 
+// 이 인터페이스는 API 응답(TravelOutfitResponse)과 일치해야 합니다.
 interface TravelStylingData {
-  travelOutfitId: number
-  status?: 'PENDING' | 'COMPLETED' | 'FAILED'  // 상태 필드 추가
+  travelId: number
+  status?: 'PENDING' | 'COMPLETED' | 'FAILED'  // 상태 필드
   country: string
   city: string
   startDate: string
   endDate: string
   weatherSummary: WeatherSummary
   culturalConstraints: CulturalConstraints
-  aiOutfit: AiOutfit
+  aiOutfit: AiOutfit // aiOutfitJson이 아닌 aiOutfit
   safetyNotes: string[]
+  errorMessage?: string // 에러 메시지 필드
 }
 
 export default function TravelRecommendationsPage() {
@@ -59,29 +64,68 @@ export default function TravelRecommendationsPage() {
   const [endDate, setEndDate] = useState("")
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stylingData, setStylingData] = useState<TravelStylingData | null>(null);
+  
+  const [loadingText, setLoadingText] = useState("AI가 스타일링 분석중");
+
+  // --- [수정] 날짜 제한 로직 ---
+  // 'YYYY-MM-DD' 형식으로 날짜를 반환하는 헬퍼
+  const getISODate = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  // 오늘 날짜 (min)
+  const today = useMemo(() => getISODate(new Date()), []);
+  
+  // 14일 뒤 날짜 (max)
+  const maxDate = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 14); // 오늘로부터 14일 뒤
+    return getISODate(date);
+  }, []);
+  // --- [수정 완료] ---
+
 
   const handleGetStyling = async () => {
+    setError(""); // 이전 에러 메시지 초기화
+
+    // --- [수정] 입력값 검증 로직 ---
     if (!country.trim() || !city.trim() || !startDate || !endDate) {
       setError("모든 필드를 입력해주세요");
       return;
     }
 
+    // 영어, 공백, 하이픈, 쉼표, 마침표, 괄호, 작은따옴표만 허용 (도시/국가 이름)
+    const englishRegex = /^[a-zA-Z\s\-.,()']+$/;
+    if (!englishRegex.test(country.trim())) {
+      setError("나라는 영어(알파벳)로만 입력해주세요.");
+      return;
+    }
+    if (!englishRegex.test(city.trim())) {
+      setError("도시는 영어(알파벳)로만 입력해주세요.");
+      return;
+    }
+    
+    if (new Date(endDate) < new Date(startDate)) {
+      setError("종료일은 시작일보다 빠를 수 없습니다.");
+      return;
+    }
+    // --- [수정 완료] ---
+
     setIsLoading(true);
-    setError("");
-    setStylingData(null);
+    setLoadingText("AI가 스타일링 분석중"); 
 
     try {
       const token = getAccessToken();
 
       if (!token) {
         setError("로그인이 필요합니다");
-        setIsLoading(false);
+        setIsLoading(false); 
+        router.push("/login"); 
         return;
       }
 
-      // 1. 먼저 추천 요청을 보냅니다
-      const requestResponse = await fetch('/api/v1/travel-outfits/recommendations', {
+      // 1. Next.js API 프록시(/api/travel) 호출 (POST)
+      const requestResponse = await fetch('/api/travel', { 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,15 +139,13 @@ export default function TravelRecommendationsPage() {
         })
       });
 
+      const responseData = await requestResponse.json(); 
+
       if (!requestResponse.ok) {
-        const errorData = await requestResponse.json();
-        throw new Error(errorData.error || '여행 옷차림 추천 요청에 실패했습니다');
+        throw new Error(responseData.error || '여행 옷차림 추천 요청에 실패했습니다');
       }
 
-      const responseData = await requestResponse.json();
-      console.log('Initial response data:', JSON.stringify(responseData.data, null, 2));
-
-      // data 객체 안의 travelId를 확인
+      // 2. 백엔드 ApiResponse에서 travelId 추출
       const travelOutfitId = responseData.data?.travelId;
 
       if (!travelOutfitId) {
@@ -113,14 +155,17 @@ export default function TravelRecommendationsPage() {
       
       console.log(`Retrieved travel outfit ID: ${travelOutfitId}`);
       
-      // 2. 결과가 준비될 때까지 주기적으로 확인합니다
+      // 3. 결과가 준비될 때까지 주기적으로 확인 (Polling)
       let retryCount = 0;
       const maxRetries = 60;  // 최대 60번 시도 (3분)
       const retryInterval = 3000;  // 3초마다 확인
 
       while (retryCount < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryInterval)); 
+        
         try {
-          const resultResponse = await fetch(`/api/v1/travel-outfits/recommendations/${travelOutfitId}`, {
+          // Next.js GET 프록시(/api/travel/history) 호출
+          const resultResponse = await fetch(`/api/travel/history/${travelOutfitId}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -129,7 +174,7 @@ export default function TravelRecommendationsPage() {
           if (!resultResponse.ok) {
             if (resultResponse.status === 404) {
               console.log('아직 결과가 준비되지 않았습니다. 재시도 중...');
-              await new Promise(resolve => setTimeout(resolve, retryInterval));
+              setLoadingText(`추천 정보 생성 중... (${retryCount+1}/${maxRetries})`);
               retryCount++;
               continue;
             }
@@ -138,41 +183,30 @@ export default function TravelRecommendationsPage() {
             throw new Error(errorData.error || `여행 옷차림 추천을 가져오는데 실패했습니다 (${resultResponse.status})`);
           }
 
-          const data = await resultResponse.json();
-          console.log('Travel styling data:', JSON.stringify(data, null, 2));
-
-          if (!data.success) {
-            if (data.message?.includes('존재하지 않는') || data.message?.includes('찾을 수 없')) {
-              console.log('아직 추천이 생성되지 않았습니다. 재시도 중...');
-              await new Promise(resolve => setTimeout(resolve, retryInterval));
-              retryCount++;
-              continue;
-            }
-            throw new Error(data.message || '여행 옷차림 추천 조회에 실패했습니다');
+          const recommendationData: TravelStylingData = await resultResponse.json();
+          
+          if (!recommendationData) {
+            console.log('아직 결과가 준비되지 않았습니다. (null 응답). 재시도 중...');
+            setLoadingText(`추천 정보 생성 중... (${retryCount+1}/${maxRetries})`);
+            retryCount++;
+            continue;
           }
 
-          const recommendationData = data.data;
           console.log('추천 처리 상태:', recommendationData?.status);
 
           // 상태에 따른 처리
-          switch (recommendationData?.status) {
+          switch (recommendationData.status) {
             case 'COMPLETED':
-              if (!recommendationData.weatherSummary || !recommendationData.aiOutfitJson) {
+              if (!recommendationData.weatherSummary || !recommendationData.aiOutfit) {
                 console.log('데이터 준비 중... (날씨 정보 및 AI 추천 대기)');
-                await new Promise(resolve => setTimeout(resolve, retryInterval));
+                setLoadingText(`데이터 정리 중... (${retryCount+1}/${maxRetries})`);
                 retryCount++;
                 continue;
               }
-              // 모든 데이터가 준비된 경우
-              console.log('추천이 완료되었습니다!');
-              
-              // aiOutfit 필드명을 aiOutfitJson으로 변경하여 데이터 설정
-              const stylingDataWithCorrectField = {
-                ...recommendationData,
-                aiOutfit: recommendationData.aiOutfitJson  // 필드명 변경
-              };
-              setStylingData(stylingDataWithCorrectField);
-              return;  // 성공적으로 완료됨
+              // 성공 시 상세 페이지로 리디렉션
+              console.log('추천이 완료되었습니다! 페이지로 이동합니다.');
+              router.push(`/travel-history/${travelOutfitId}`);
+              return; // 성공 (페이지 이동이 시작되면 로딩을 false로 바꿀 필요 없음)
               
             case 'FAILED':
               // 처리 중 오류가 발생한 경우
@@ -180,43 +214,30 @@ export default function TravelRecommendationsPage() {
               
             case 'PENDING':
             default:
-              // 진행 상태 메시지 설정
+              // 로딩 텍스트 업데이트
               let statusMessage = '옷차림 추천 준비 중...';
-              if (recommendationData.processingStatus) {
-                if (recommendationData.processingStatus.includes('날씨')) {
-                  statusMessage = '날씨 정보 수집 중...';
-                } else if (recommendationData.processingStatus.includes('AI')) {
-                  statusMessage = 'AI가 옷차림을 분석 중...';
-                }
-              }
               console.log(`${statusMessage} (${retryCount + 1}/${maxRetries})`);
-              
-              // Loading UI 업데이트를 위한 부분 상태 설정
-              setError(null);  // 진행 중일 때는 에러 메시지 제거
-              setIsLoading(true);  // 로딩 상태 유지
-              
-              await new Promise(resolve => setTimeout(resolve, retryInterval));
+              setLoadingText(`${statusMessage} (${retryCount + 1}/${maxRetries})`);
               retryCount++;
               continue;
           }
-        } catch (error) {
+        } catch (pollError) {
           if (retryCount >= maxRetries) {
-            throw error;  // 최대 시도 횟수를 초과한 경우 에러를 상위로 전파
+            throw pollError;  // 최대 시도 횟수를 초과한 경우 에러를 상위로 전파
           }
-          console.warn('재시도 중 오류 발생:', error);
-          await new Promise(resolve => setTimeout(resolve, retryInterval));
+          console.warn('재시도 중 오류 발생:', pollError);
           retryCount++;
         }
       }
 
       throw new Error('시간 초과: 여행 옷차림 추천을 가져오는데 실패했습니다');
+
     } catch (err) {
       console.error('Failed to fetch travel styling:', err);
       setError(err instanceof Error ? err.message : '여행 옷차림 추천을 가져오는데 실패했습니다');
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false); // 에러가 발생했을 때만 isLoading을 false로 설정
     }
-  };
+  }; 
 
   return (
     <main className="min-h-screen bg-white">
@@ -324,6 +345,8 @@ export default function TravelRecommendationsPage() {
                   onChange={(e) => setStartDate(e.target.value)}
                   className="rounded-full border-2 border-slate-300 px-6 py-3 text-base w-full"
                   placeholder="시작일"
+                  min={today} // [수정] 오늘 날짜
+                  max={maxDate} // [수정] 14일 뒤
                 />
               </div>
 
@@ -334,6 +357,8 @@ export default function TravelRecommendationsPage() {
                   onChange={(e) => setEndDate(e.target.value)}
                   className="rounded-full border-2 border-slate-300 px-6 py-3 text-base w-full"
                   placeholder="종료일"
+                  min={startDate || today} // [수정] 시작일 또는 오늘 날짜
+                  max={maxDate} // [수정] 14일 뒤
                 />
               </div>
             </div>
@@ -351,7 +376,7 @@ export default function TravelRecommendationsPage() {
             <LoadingButton
               onClick={handleGetStyling}
               isLoading={isLoading}
-              loadingText="AI가 스타일링 분석중"
+              loadingText={loadingText} // 동적 로딩 텍스트
               className="bg-[#4169E1] hover:bg-[#3154B3] text-white rounded-full px-12 py-4 font-semibold text-lg"
             >
               스타일링 받기
@@ -404,116 +429,10 @@ export default function TravelRecommendationsPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Cultural Constraints Skeleton */}
-              <div className="bg-purple-50 rounded-xl p-6 space-y-3">
-                <Skeleton className="h-7 w-48" />
-                <Skeleton className="h-4 w-full" />
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-10 w-full rounded-lg" />
-                  ))}
-                </div>
-              </div>
-
-              {/* Safety Notes Skeleton */}
-              <div className="bg-red-50 rounded-xl p-6 space-y-3">
-                <Skeleton className="h-7 w-40" />
-                <div className="space-y-2">
-                  {[1, 2].map((i) => (
-                    <Skeleton key={i} className="h-10 w-full rounded-lg" />
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
-          {/* Styling Recommendation Result */}
-          {stylingData && !isLoading && (
-            <div className="mt-8 space-y-6">
-              {/* Weather Summary */}
-              <div className="p-6 bg-blue-50 border-2 border-blue-200 rounded-xl">
-                <h3 className="text-xl font-bold text-slate-900 mb-4">날씨 요약</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {stylingData?.weatherSummary && (
-                    <>
-                      <div>
-                        <p className="text-sm text-slate-600">평균 기온</p>
-                        <p className="text-2xl font-bold text-blue-600">{Number(stylingData.weatherSummary.avgTemperature).toFixed(1)}°C</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-600">강수 확률</p>
-                        <p className="text-2xl font-bold text-blue-600">{Number(stylingData.weatherSummary.rainProbability).toFixed(1)}%</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-600">평균 습도</p>
-                        <p className="text-2xl font-bold text-blue-600">{Number(stylingData.weatherSummary.avgHumidity).toFixed(1)}%</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-600">날씨 상태</p>
-                        <p className="text-xl font-bold text-blue-600">{stylingData.weatherSummary.condition}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-                {stylingData?.weatherSummary?.umbrellaSummary && (
-                  <p className="mt-4 text-sm text-slate-700">{stylingData.weatherSummary.umbrellaSummary}</p>
-                )}
-              </div>
-
-              {/* AI Outfit Recommendation */}
-              <div className="p-6 bg-green-50 border-2 border-green-200 rounded-xl">
-                <h3 className="text-xl font-bold text-slate-900 mb-4">AI 옷차림 추천</h3>
-                <p className="text-base text-slate-700 leading-relaxed mb-6">{stylingData?.aiOutfit?.summary}</p>
-                
-                <div className="space-y-4">
-                  {stylingData?.aiOutfit?.outfits?.map((outfit) => (
-                    <div key={outfit.setNo} className="p-4 bg-white rounded-lg border border-green-200">
-                      <p className="font-bold text-slate-900 mb-2">코디 {outfit.setNo}</p>
-                      <p className="text-sm text-slate-600 mb-3">{outfit.reason}</p>
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                          {outfit.items.map((item, idx) => (
-                            <span
-                              key={idx}
-                              className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm"
-                            >
-                              {item.item} ({item.styleTag})
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Cultural Constraints */}
-              {stylingData?.culturalConstraints?.rules?.length > 0 && (
-                <div className="p-6 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">문화적 주의사항</h3>
-                  <p className="text-base text-slate-700 mb-3">{stylingData.culturalConstraints.notes}</p>
-                  <ul className="list-disc list-inside space-y-2">
-                    {stylingData.culturalConstraints.rules.map((rule, idx) => (
-                      <li key={idx} className="text-sm text-slate-700">{rule}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Safety Notes */}
-              {stylingData?.safetyNotes?.length > 0 && (
-                <div className="p-6 bg-red-50 border-2 border-red-200 rounded-xl">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">안전 주의사항</h3>
-                  <ul className="list-disc list-inside space-y-2">
-                    {stylingData.safetyNotes.map((note, idx) => (
-                      <li key={idx} className="text-sm text-slate-700">{note}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Styling Recommendation Result - 제거 (완료 시 페이지 이동) */}
         </div>
       </div>
     </main>
