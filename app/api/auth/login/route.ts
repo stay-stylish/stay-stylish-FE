@@ -56,13 +56,13 @@ export async function POST(request: Request) {
     }
 
     const userData = await userResponse.json()
-    const user = userData.data
-    console.log('User info fetched:', user.email)
+    const user = userData.data;
+    console.log('User info fetched:', user.email);
 
     // 프론트엔드 형식에 맞게 변환
     return NextResponse.json({
       user: {
-        id: user.id.toString(), // userId가 아니라 id
+        id: user.id.toString(),
         email: user.email,
         nickname: user.nickname,
         preferredStyle: user.stylePreference || '',

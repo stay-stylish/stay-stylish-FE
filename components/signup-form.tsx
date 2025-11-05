@@ -86,10 +86,19 @@ export function SignupForm() {
 
   const handleGoogleSignup = async () => {
     setIsLoading(true)
-    // Simulate Google OAuth flow
-    console.log("Google signup initiated")
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
+    try {
+      // Spring Security OAuth2 로그인 엔드포인트로 리다이렉트
+      // (회원가입과 로그인이 같은 엔드포인트 사용)
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
+          process.env.NEXT_PUBLIC_API_URL ||
+          'http://localhost:8080'
+
+      window.location.href = `${backendUrl}/oauth2/authorization/google`
+    } catch (error) {
+      console.error("Google signup error:", error)
+      setError("Google 회원가입에 실패했습니다")
+      setIsLoading(false)
+    }
   }
 
   return (

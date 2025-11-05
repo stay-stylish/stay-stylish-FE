@@ -4,14 +4,14 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 
-export default function OAuthCallbackPage() {
+export default function OAuthSuccessPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const { loginWithOAuth } = useAuth()
     const [error, setError] = useState<string>("")
 
     useEffect(() => {
         const handleCallback = async () => {
+            // URL에서 일회용 코드 추출
             const code = searchParams.get('code')
 
             if (!code) {
@@ -21,9 +21,9 @@ export default function OAuthCallbackPage() {
             }
 
             try {
-                console.log('[OAuth Callback] 일회용 코드 수신:', code)
+                console.log('[OAuth Success] 일회용 코드 수신:', code)
 
-                // 토큰 교환
+                // 백엔드에 일회용 코드 전송하여 토큰 교환
                 const response = await fetch('/api/auth/oauth/exchange', {
                     method: 'POST',
                     headers: {
@@ -32,13 +32,15 @@ export default function OAuthCallbackPage() {
                     body: JSON.stringify({ code }),
                 })
 
+                console.log('[OAuth Success] 교환 API 응답 상태:', response.status)
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
                     throw new Error(errorData.error || '토큰 교환에 실패했습니다.')
                 }
 
                 const data = await response.json()
-                console.log('[OAuth Callback] 토큰 교환 성공')
+                console.log('[OAuth Success] 토큰 교환 성공, isNewUser:', data.isNewUser)
 
                 // 사용자 정보 가져오기
                 const userResponse = await fetch('/api/auth/me', {
@@ -52,29 +54,36 @@ export default function OAuthCallbackPage() {
                 }
 
                 const userData = await userResponse.json()
-                console.log('[OAuth Callback] 사용자 정보 조회 성공:', userData.email)
+                console.log('[OAuth Success] 사용자 정보 조회 성공:', userData.email)
 
-                // Zustand 스토어에 한 번에 저장
-                loginWithOAuth(data.accessToken, data.refreshToken, userData)
+                // Zustand 스토어에 저장
+                useAuth.setState({
+                    user: userData,
+                    accessToken: data.accessToken,
+                    refreshToken: data.refreshToken,
+                    isAuthenticated: true,
+                })
 
-                // URL 정리
-                window.history.replaceState({}, document.title, window.location.pathname)
+                // URL 정리 (브라우저 히스토리에서 코드 제거)
+                window.history.replaceState({}, document.title, '/')
 
-                // 리다이렉트
+                // 신규 유저면 추가 정보 입력 페이지로, 아니면 홈으로
                 if (data.isNewUser) {
+                    console.log('[OAuth Success] 신규 유저 → 추가 정보 입력 페이지로 이동')
                     router.push('/signup/additional')
                 } else {
+                    console.log('[OAuth Success] 기존 유저 → 홈으로 이동')
                     router.push('/')
                 }
             } catch (err) {
-                console.error('[OAuth Callback] 오류:', err)
+                console.error('[OAuth Success] 오류 발생:', err)
                 setError(err instanceof Error ? err.message : '로그인 처리 중 오류가 발생했습니다.')
                 setTimeout(() => router.push('/login'), 3000)
             }
         }
 
         handleCallback()
-    }, [searchParams, router, loginWithOAuth])
+    }, [searchParams, router])
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
@@ -95,8 +104,8 @@ export default function OAuthCallbackPage() {
                                 <div className="w-4 h-4 bg-blue-600 rounded-full animate-bounce"></div>
                             </div>
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-900">로그인 처리 중...</h2>
-                        <p className="text-slate-600">잠시만 기다려주세요</p>
+                        <h2 className="text-2xl font-bold text-slate-900">🎉 Google 로그인 성공!</h2>
+                        <p className="text-slate-600">잠시만 기다려주세요...</p>
                     </>
                 )}
             </div>
