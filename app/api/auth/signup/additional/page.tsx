@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function AdditionalInfoPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const { login } = useAuth()
+    const { loginWithOAuth } = useAuth()
 
     const [nickname, setNickname] = useState("")
     const [gender, setGender] = useState("")
@@ -63,13 +63,16 @@ export default function AdditionalInfoPage() {
 
             const userData = await response.json()
 
-            // 2. 로컬에 토큰과 유저 정보 저장
-            localStorage.setItem('accessToken', accessToken!)
-            localStorage.setItem('refreshToken', refreshToken!)
-            localStorage.setItem('user', JSON.stringify({
-                ...userData,
-                id: userData.id || userData.userId
-            }))
+            // 2. Zustand 스토어에 토큰과 사용자 정보 저장
+            // (localStorage는 자동으로 persist 미들웨어가 처리함)
+            // Non-null assertion (!) 사용 - 위에서 체크했으므로 null이 아님
+            loginWithOAuth(accessToken!, refreshToken!, {
+                id: userData.id || userData.userId,
+                email: userData.email,
+                nickname: userData.nickname,
+                preferredStyle: userData.preferredStyle || '',
+                gender: userData.gender || ''
+            })
 
             // 3. 홈으로 이동
             router.push('/')
