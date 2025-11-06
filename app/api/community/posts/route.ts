@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     // Call backend to get posts
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/v1/posts?page=${page}&size=${size}`,
+      `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}/api/v1/posts?page=${page}&size=${size}`,
       {
         method: "GET",
         headers: {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Call backend to create post
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/v1/posts`,
+      `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}/api/v1/posts`,
       {
         method: "POST",
         headers: {

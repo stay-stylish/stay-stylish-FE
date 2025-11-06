@@ -19,14 +19,14 @@ export async function POST(request: NextRequest) {
     console.log('Updating profile:', { nickname, preferredStyle, gender });
 
     // Map frontend gender values to backend ENUM
-    let genderValue: string;
-    if (gender === "남성" || gender === "MALE") {
-      genderValue = "MALE";
-    } else if (gender === "여성" || gender === "FEMALE") {
-      genderValue = "FEMALE";
-    } else {
-      genderValue = "MALE"; // 기본값
-    }
+    const genderMap: { [key: string]: "MALE" | "FEMALE" } = {
+      "남성": "MALE",
+      "여성": "FEMALE",
+      "MALE": "MALE",
+      "FEMALE": "FEMALE",
+    };
+
+    const genderValue = genderMap[gender?.toUpperCase()] || "MALE";
 
     // Call backend to update profile
     const response = await fetch(
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       email: updatedUser.email,
       nickname: updatedUser.nickname,
       preferredStyle: updatedUser.stylePreference,
-      gender: displayGender,
+      gender: updatedUser.gender,
     });
   } catch (error) {
     console.error("Error updating profile:", error);
