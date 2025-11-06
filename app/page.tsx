@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Search, Plane, Users, LogOut } from "lucide-react"
+import { Search, Plane, Users, LogOut, CornerDownLeft } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useWeather } from "@/hooks/use-weather"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -259,8 +259,9 @@ export default function Home() {
                     handleGetWeather()
                   }
                 }}
-                className="rounded-full border-2 border-slate-300 px-8 py-6 pl-16 text-xl w-full shadow-sm hover:shadow-md transition-shadow"
+                className="rounded-full border-2 border-slate-300 px-8 py-6 pl-16 pr-14 text-xl w-full shadow-sm hover:shadow-md transition-shadow"
               />
+              <CornerDownLeft className="absolute right-6 top-1/2 transform -translate-y-1/2 w-6 h-6 text-slate-300" />
             </div>
             <Button
               onClick={async () => {

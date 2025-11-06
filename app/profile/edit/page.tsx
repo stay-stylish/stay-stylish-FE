@@ -16,6 +16,7 @@ export default function ProfileEditPage() {
     preferredStyle: "",
     gender: "",
   })
+  const [showCustomInput, setShowCustomInput] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -89,26 +90,41 @@ export default function ProfileEditPage() {
 
             <div className="space-y-2">
               <Label htmlFor="preferredStyle">선호 스타일</Label>
-              <Input
-                id="preferredStyle"
-                value={formData.preferredStyle}
-                onChange={(e) => setFormData(prev => ({ ...prev, preferredStyle: e.target.value }))}
-                placeholder="선호하는 스타일을 입력하세요"
-              />
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="flex flex-wrap gap-2">
                 {['캐주얼', '클래식', '스트릿', '스포티', '미니멀'].map((style) => (
                   <Button
                     key={style}
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setFormData(prev => ({ ...prev, preferredStyle: style }))}
-                    className={formData.preferredStyle === style ? 'bg-blue-50 border-blue-500 text-blue-700' : ''}
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, preferredStyle: style }))
+                      setShowCustomInput(false)
+                    }}
+                    className={formData.preferredStyle === style && !showCustomInput ? 'bg-blue-50 border-blue-500 text-blue-700' : ''}
                   >
                     {style}
                   </Button>
                 ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCustomInput(true)}
+                  className={showCustomInput ? 'bg-blue-50 border-blue-500 text-blue-700' : ''}
+                >
+                  직접 입력
+                </Button>
               </div>
+              {showCustomInput && (
+                <Input
+                  id="preferredStyle"
+                  value={formData.preferredStyle}
+                  onChange={(e) => setFormData(prev => ({ ...prev, preferredStyle: e.target.value }))}
+                  placeholder="선호하는 스타일을 입력하세요"
+                  className="mt-2"
+                />
+              )}
             </div>
 
             <div className="space-y-2">
