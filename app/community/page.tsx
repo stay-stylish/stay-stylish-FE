@@ -62,7 +62,7 @@ export default function CommunityPage() {
       return
     }
     fetchPosts()
-  }, [page, sortBy, isAuthenticated])
+  }, [page, sortBy])
 
   const fetchPosts = async () => {
     setIsLoading(true)

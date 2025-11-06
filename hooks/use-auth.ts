@@ -15,7 +15,7 @@ interface AuthState {
   refreshToken: string | null
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
-  loginWithOAuth: (accessToken: string, refreshToken: string, user: User) => void // ✅ 추가
+  loginWithOAuth: (accessToken: string, refreshToken: string, user: User) => void
   logout: () => void
   updateUser: (user: Partial<User>) => Promise<void>
   getAccessToken: () => string | null
@@ -59,17 +59,33 @@ export const useAuth = create<AuthState>()(
             }
           },
 
-          // OAuth 로그인 전용 메서드 추가
           loginWithOAuth: (accessToken: string, refreshToken: string, user: User) => {
+            console.log('[useAuth] loginWithOAuth 호출')
+            console.log('[useAuth] 저장할 데이터:', { user, accessToken: accessToken ? '있음' : '없음', refreshToken: refreshToken ? '있음' : '없음' })
+
             set({
               user,
               accessToken,
               refreshToken,
               isAuthenticated: true,
             });
+
+            console.log('[useAuth] Zustand 상태 저장 완료')
+            console.log('[useAuth] localStorage 저장 확인:', {
+              stored: localStorage.getItem('auth-storage')
+            })
           },
 
-          logout: () => set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
+          logout: () => {
+            console.log('[useAuth] logout 호출')
+            set({
+              user: null,
+              accessToken: null,
+              refreshToken: null,
+              isAuthenticated: false
+            });
+            console.log('[useAuth] logout 완료')
+          },
 
           updateUser: async (updatedUser) => {
             try {
@@ -103,8 +119,15 @@ export const useAuth = create<AuthState>()(
             }
           },
 
-          getAccessToken: () => get().accessToken,
-          setAccessToken: (token: string) => set({ accessToken: token }),
+          getAccessToken: () => {
+            const token = get().accessToken;
+            console.log('[useAuth] getAccessToken:', token ? '있음' : '없음');
+            return token;
+          },
+
+          setAccessToken: (token: string) => {
+            set({ accessToken: token });
+          },
 
           withdrawAccount: async () => {
             try {
@@ -124,7 +147,12 @@ export const useAuth = create<AuthState>()(
                 throw new Error("회원탈퇴에 실패했습니다");
               }
 
-              set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false });
+              set({
+                user: null,
+                accessToken: null,
+                refreshToken: null,
+                isAuthenticated: false
+              });
             } catch (error) {
               console.error("Account withdrawal error:", error);
               throw error;
@@ -133,6 +161,23 @@ export const useAuth = create<AuthState>()(
         }),
         {
           name: 'auth-storage',
+          partialize: (state) => ({
+            user: state.user,
+            accessToken: state.accessToken,
+            refreshToken: state.refreshToken,
+            isAuthenticated: state.isAuthenticated,
+          }),
+
+          onRehydrateStorage: () => (state, error) => {
+            if (error) {
+              console.error('[useAuth] 상태 복원 오류:', error);
+            } else if (state) {
+              console.log('[useAuth] 상태 복원 완료:', {
+                user: state.user?.email,
+                isAuthenticated: state.isAuthenticated,
+              });
+            }
+          },
         }
     )
 )

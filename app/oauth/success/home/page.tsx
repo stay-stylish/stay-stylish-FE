@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { CheckCircle, AlertCircle, Loader } from "lucide-react"
@@ -11,26 +11,22 @@ export default function OAuthSuccessHomePage() {
     const searchParams = useSearchParams()
     const { loginWithOAuth } = useAuth()
 
+    const isProcessing = useRef(false)
+
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
     const [message, setMessage] = useState('')
-    const [processed, setProcessed] = useState(false)
 
     useEffect(() => {
-        const code = searchParams.get('code')
-
-        // 🔥 핵심: 코드가 바뀌면 processed를 reset!
-        // 로그아웃 후 재로그인할 때 다른 코드가 오므로 이를 감지!
-        setProcessed(false)
-    }, [searchParams.get('code')])  // 코드가 바뀔 때마다 실행
-
-    useEffect(() => {
-        // 🔥 이미 처리했으면 다시 실행 안 함
-        if (processed) {
-            console.log('[OAuth Success Home] 이미 처리됨 - 중복 요청 무시')
+        // 이미 처리 중이면 리턴
+        if (isProcessing.current) {
+            console.log('[OAuth Success Home] 이미 처리 중 - 중복 실행 방지')
             return
         }
 
         const handleOAuthLogin = async () => {
+            // 처리 시작 표시
+            isProcessing.current = true
+
             try {
                 const code = searchParams.get('code')
 
@@ -41,10 +37,8 @@ export default function OAuthSuccessHomePage() {
                     throw new Error('인증 코드가 없습니다')
                 }
 
-                // 1단계: 코드로 토큰 교환 (즉시!)
+                // 1단계: 코드로 토큰 교환
                 console.log('[OAuth Success Home] 토큰 교환 시작...')
-                console.log('[OAuth Success Home] 요청: POST /api/auth/oauth/exchange')
-
                 const exchangeResponse = await fetch('/api/auth/oauth/exchange', {
                     method: 'POST',
                     headers: {
@@ -59,22 +53,14 @@ export default function OAuthSuccessHomePage() {
                     const errorData = await exchangeResponse.json().catch(() => ({}))
                     console.error('[OAuth Success Home] 교환 실패:', errorData)
                     throw new Error(
-                        errorData.error ||
-                        errorData.details?.originalError?.message ||
-                        '토큰 교환에 실패했습니다'
+                        errorData.error || '토큰 교환에 실패했습니다'
                     )
                 }
 
                 const exchangeData = await exchangeResponse.json()
                 console.log('[OAuth Success Home] 교환 성공!')
-                console.log('[OAuth Success Home] 토큰 확인:', {
-                    accessToken: exchangeData.accessToken ? '있음' : '없음',
-                    refreshToken: exchangeData.refreshToken ? '있음' : '없음',
-                    isNewUser: exchangeData.isNewUser
-                })
 
-                const accessToken = exchangeData.accessToken
-                const refreshToken = exchangeData.refreshToken
+                const { accessToken, refreshToken } = exchangeData
 
                 if (!accessToken || !refreshToken) {
                     throw new Error('토큰이 없습니다')
@@ -82,7 +68,6 @@ export default function OAuthSuccessHomePage() {
 
                 // 2단계: 사용자 정보 조회
                 console.log('[OAuth Success Home] 사용자 정보 조회 중...')
-
                 const userResponse = await fetch('/api/auth/me', {
                     headers: {
                         'Authorization': `Bearer ${accessToken}`,
@@ -101,23 +86,13 @@ export default function OAuthSuccessHomePage() {
 
                 // 3단계: 스토어에 저장
                 console.log('[OAuth Success Home] 스토어 저장 중...')
+                loginWithOAuth(accessToken, refreshToken, userData)
 
-                loginWithOAuth(accessToken, refreshToken, {
-                    id: userData.id,
-                    email: userData.email,
-                    nickname: userData.nickname,
-                    preferredStyle: userData.preferredStyle || '',
-                    gender: userData.gender || ''
-                })
-
-                console.log('[OAuth Success Home] ✅ 완료! 홈으로 이동')
+                console.log('[OAuth Success Home] 완료! 홈으로 이동')
                 console.log('[OAuth Success Home] ===== 성공 =====')
 
                 setStatus('success')
                 setMessage('로그인되었습니다!')
-
-                // 🔥 처리 완료 표시
-                setProcessed(true)
 
                 // 2초 후 홈으로 이동
                 setTimeout(() => {
@@ -125,9 +100,7 @@ export default function OAuthSuccessHomePage() {
                 }, 2000)
 
             } catch (err) {
-                console.error('[OAuth Success Home] ❌ 예외:', err)
-                console.error('[OAuth Success Home] 에러 메시지:', err instanceof Error ? err.message : String(err))
-                console.log('[OAuth Success Home] ===== 실패 =====')
+                console.error('[OAuth Success Home] 예외:', err)
 
                 setStatus('error')
                 setMessage(
@@ -135,9 +108,6 @@ export default function OAuthSuccessHomePage() {
                         ? err.message
                         : '로그인 처리 중 오류가 발생했습니다'
                 )
-
-                // 🔥 처리 완료 표시 (에러도 중복 방지)
-                setProcessed(true)
 
                 // 3초 후 로그인 페이지로
                 setTimeout(() => {
@@ -147,7 +117,7 @@ export default function OAuthSuccessHomePage() {
         }
 
         handleOAuthLogin()
-    }, [searchParams, router, loginWithOAuth, processed])
+    }, [])
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">

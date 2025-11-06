@@ -5,7 +5,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:808
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
-    console.log('Login request for:', email)
+    console.log('[Login] 로그인 요청:', email)
 
     // stay-stylish 백엔드 로그인 API 호출
     const response = await fetch(`${BACKEND_URL}/api/v1/auth/login`, {
@@ -16,27 +16,27 @@ export async function POST(request: Request) {
       body: JSON.stringify({ email, password }),
     })
 
-    console.log('Backend login response status:', response.status)
+    console.log('[Login] 백엔드 응답 상태:', response.status)
 
     if (!response.ok) {
       const errorData = await response.json()
-      console.error('Backend login error:', errorData)
+      console.error('[Login] 백엔드 오류:', errorData)
       return new NextResponse(
-        JSON.stringify({
-          error: errorData.message || "로그인에 실패했습니다."
-        }),
-        {
-          status: response.status,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
+          JSON.stringify({
+            error: errorData.message || "로그인에 실패했습니다."
+          }),
+          {
+            status: response.status,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
       )
     }
 
     const data = await response.json()
-    console.log('Login successful, got tokens')
-    
+    console.log('[Login] 로그인 성공')
+
     // 백엔드 응답: { success, message, data: { accessToken, refreshToken }, timestamp }
     const tokens = data.data
 
@@ -47,42 +47,41 @@ export async function POST(request: Request) {
       },
     })
 
-    console.log('User info response status:', userResponse.status)
+    console.log('[Login] 사용자 정보 응답 상태:', userResponse.status)
 
     if (!userResponse.ok) {
       const userError = await userResponse.json()
-      console.error('User info fetch error:', userError)
+      console.error('[Login] 사용자 정보 조회 오류:', userError)
       throw new Error('사용자 정보 조회 실패')
     }
 
     const userData = await userResponse.json()
     const user = userData.data;
-    console.log('User info fetched:', user.email);
+    console.log('[Login] 사용자 정보 조회 완료:', user.email);
 
-    // 프론트엔드 형식에 맞게 변환
     return NextResponse.json({
       user: {
         id: user.id.toString(),
         email: user.email,
         nickname: user.nickname,
         preferredStyle: user.stylePreference || '',
-        gender: user.gender || '',
+        gender: user.gender || '', // MALE/FEMALE 그대로
       },
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     })
   } catch (error) {
-    console.error('Login API error:', error)
+    console.error('[Login] 예외 발생:', error)
     return new NextResponse(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "서버 오류가 발생했습니다."
-      }),
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "서버 오류가 발생했습니다."
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
     )
   }
 }

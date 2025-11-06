@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/hooks/use-auth"
 
-export default function AdditionalInfoPage() {
+export default function SignupAdditionalPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const { loginWithOAuth } = useAuth()
@@ -20,7 +20,6 @@ export default function AdditionalInfoPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState("")
 
-    // URL에서 토큰 추출
     const accessToken = searchParams.get('accessToken')
     const refreshToken = searchParams.get('refreshToken')
 
@@ -43,7 +42,6 @@ export default function AdditionalInfoPage() {
         setError("")
 
         try {
-            // 1. 추가 정보 업데이트
             const response = await fetch('/api/auth/update-profile', {
                 method: 'POST',
                 headers: {
@@ -63,9 +61,6 @@ export default function AdditionalInfoPage() {
 
             const userData = await response.json()
 
-            // 2. Zustand 스토어에 토큰과 사용자 정보 저장
-            // (localStorage는 자동으로 persist 미들웨어가 처리함)
-            // Non-null assertion (!) 사용 - 위에서 체크했으므로 null이 아님
             loginWithOAuth(accessToken!, refreshToken!, {
                 id: userData.id || userData.userId,
                 email: userData.email,
@@ -74,11 +69,10 @@ export default function AdditionalInfoPage() {
                 gender: userData.gender || ''
             })
 
-            // 3. 홈으로 이동
             router.push('/')
 
         } catch (err) {
-            console.error('Profile update error:', err)
+            console.error('[Signup Additional] 오류:', err)
             setError(err instanceof Error ? err.message : "프로필 업데이트에 실패했습니다.")
         } finally {
             setIsLoading(false)
@@ -125,8 +119,8 @@ export default function AdditionalInfoPage() {
                                     <SelectValue placeholder="성별을 선택하세요" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="남성">남성</SelectItem>
-                                    <SelectItem value="여성">여성</SelectItem>
+                                    <SelectItem value="MALE">남성</SelectItem>
+                                    <SelectItem value="FEMALE">여성</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

@@ -56,7 +56,7 @@ export async function DELETE(request: NextRequest) {
 
 /**
  * GET /api/v1/users/me
- * 사용자 정보 조회 (기존 기능 유지)
+ * 사용자 정보 조회
  */
 export async function GET(request: NextRequest) {
     try {
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
             email: user.email,
             nickname: user.nickname,
             preferredStyle: user.stylePreference || '',
-            gender: user.gender || '',
+            gender: user.gender || '', // MALE/FEMALE 그대로
         })
     } catch (error) {
         console.error('[Get User] 예외 발생:', error)
@@ -127,13 +127,20 @@ export async function PUT(request: NextRequest) {
         const body = await request.json()
         const { nickname, stylePreference, gender } = body
 
-        console.log('[Update User] 사용자 정보 수정 시작')
+        console.log('[Update User] 사용자 정보 수정 시작:', { nickname, stylePreference, gender })
 
-        // 백엔드에서 ENUM으로 받는 gender 변환
-        let genderValue = 'MALE'
-        if (gender === '여성' || gender === 'FEMALE') {
-            genderValue = 'FEMALE'
-        }
+        const genderMap: { [key: string]: "MALE" | "FEMALE" } = {
+            "남성": "MALE",
+            "여성": "FEMALE",
+            "male": "MALE",
+            "female": "FEMALE",
+            "MALE": "MALE",
+            "FEMALE": "FEMALE",
+        };
+
+        const genderValue = gender ? (genderMap[gender.toString()] || "MALE") : "MALE";
+
+        console.log('[Update User] Gender 변환:', gender, '→', genderValue)
 
         const response = await fetch(`${BACKEND_URL}/api/v1/users/me`, {
             method: 'PUT',
@@ -169,7 +176,7 @@ export async function PUT(request: NextRequest) {
             email: updatedUser.email,
             nickname: updatedUser.nickname,
             preferredStyle: updatedUser.stylePreference || '',
-            gender: updatedUser.gender === 'FEMALE' ? '여성' : '남성',
+            gender: updatedUser.gender, // MALE/FEMALE 그대로
         })
     } catch (error) {
         console.error('[Update User] 예외 발생:', error)
