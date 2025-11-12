@@ -44,7 +44,7 @@ export default function CreatePostPage() {
       const response = await fetch('/api/community/posts', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -58,23 +58,21 @@ export default function CreatePostPage() {
         throw new Error(errorData.message || '게시글 작성에 실패했습니다.');
       }
 
-      const result = await response.json();
-      console.log('Create post response:', result);
+      await response.json();
 
       toast({
         title: '성공',
         description: '게시글이 작성되었습니다.',
       });
 
-      // 커뮤니티 목록으로 이동
       router.push('/community');
       router.refresh();
-
     } catch (err) {
       console.error('Error creating post:', err);
       toast({
         title: '오류',
-        description: err instanceof Error ? err.message : '게시글 작성 중 오류가 발생했습니다.',
+        description:
+          err instanceof Error ? err.message : '게시글 작성 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
     } finally {
@@ -82,77 +80,82 @@ export default function CreatePostPage() {
     }
   };
 
+  // '뒤로가기' 안정성 강화
   const handleBack = () => {
-    router.back();
+    if (window.history.length > 2) {
+      router.back();
+    } else {
+      router.push('/community');
+    }
   };
 
   return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto">
-          <Button
-              variant="ghost"
-              onClick={handleBack}
-              className="mb-4"
-              disabled={isSubmitting}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            취소
-          </Button>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mx-auto max-w-3xl">
+        <Button
+          variant="ghost"
+          onClick={handleBack}
+          className="mb-4"
+          disabled={isSubmitting}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          취소
+        </Button>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>새 게시글 작성</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="title">제목</Label>
-                  <Input
-                      id="title"
-                      placeholder="게시글 제목을 입력하세요"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      disabled={isSubmitting}
-                      maxLength={100}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {title.length}/100
-                  </p>
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>새 게시글 작성</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="title">제목</Label>
+                <Input
+                  id="title"
+                  placeholder="게시글 제목을 입력하세요"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  disabled={isSubmitting}
+                  maxLength={100}
+                />
+                <p className="text-xs text-muted-foreground">{title.length}/100</p>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="content">내용</Label>
-                  <Textarea
-                      id="content"
-                      placeholder="게시글 내용을 입력하세요&#10;&#10;이미지를 추가하려면:&#10;- 마크다운: ![설명](이미지URL)&#10;- HTML: <img src='이미지URL' />&#10;- 직접 URL: https://example.com/image.jpg"
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      disabled={isSubmitting}
-                      rows={15}
-                      className="resize-y"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="content">내용</Label>
+                <Textarea
+                  id="content"
+                  placeholder={
+                    "게시글 내용을 입력하세요\n\n이미지를 추가하려면:\n- 마크다운: ![설명](이미지URL)\n- HTML: <img src='이미지URL' />\n- 직접 URL: https://example.com/image.jpg"
+                  }
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  disabled={isSubmitting}
+                  rows={15}
+                  className="resize-y"
+                />
+              </div>
 
-                <div className="flex gap-3 justify-end">
-                  <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleBack}
-                      disabled={isSubmitting}
-                  >
-                    취소
-                  </Button>
-                  <Button
-                      type="submit"
-                      disabled={isSubmitting || !title.trim() || !content.trim()}
-                  >
-                    {isSubmitting ? '작성 중...' : '게시글 작성'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={isSubmitting}
+                >
+                  취소
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || !title.trim() || !content.trim()}
+                >
+                  {isSubmitting ? '작성 중...' : '게시글 작성'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
+    </div>
   );
 }

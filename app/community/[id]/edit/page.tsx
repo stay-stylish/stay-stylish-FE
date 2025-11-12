@@ -12,11 +12,11 @@ import { ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function EditPostPage() {
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
-  
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function EditPostPage() {
       try {
         setIsLoading(true);
         const token = getAccessToken();
-        
+
         if (!token) {
           router.push('/login');
           return;
@@ -35,7 +35,7 @@ export default function EditPostPage() {
 
         const response = await fetch(`/api/community/posts/${params.id}`, {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -45,14 +45,15 @@ export default function EditPostPage() {
 
         const result = await response.json();
         const postData = result.data || result;
-        
-        setTitle(postData.title);
-        setContent(postData.content);
+
+        setTitle(postData.title ?? '');
+        setContent(postData.content ?? '');
       } catch (err) {
         console.error('Error fetching post:', err);
         toast({
           title: '오류',
-          description: err instanceof Error ? err.message : '게시글을 불러올 수 없습니다.',
+          description:
+            err instanceof Error ? err.message : '게시글을 불러올 수 없습니다.',
           variant: 'destructive',
         });
         router.push('/community');
@@ -69,7 +70,7 @@ export default function EditPostPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!title.trim() || !content.trim()) {
       toast({
         title: '입력 오류',
@@ -82,7 +83,7 @@ export default function EditPostPage() {
     try {
       setIsSubmitting(true);
       const token = getAccessToken();
-      
+
       if (!token) {
         router.push('/login');
         return;
@@ -91,7 +92,7 @@ export default function EditPostPage() {
       const response = await fetch(`/api/community/posts/${params.id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -115,7 +116,8 @@ export default function EditPostPage() {
       console.error('Error updating post:', err);
       toast({
         title: '오류',
-        description: err instanceof Error ? err.message : '게시글 수정 중 오류가 발생했습니다.',
+        description:
+          err instanceof Error ? err.message : '게시글 수정 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
     } finally {
@@ -123,18 +125,23 @@ export default function EditPostPage() {
     }
   };
 
+  // '뒤로가기' 안정성 강화
   const handleBack = () => {
-    router.push(`/community/${params.id}`);
+    if (window.history.length > 2) {
+      router.back();
+    } else {
+      router.push(`/community/${params.id}`);
+    }
   };
 
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto">
+        <div className="mx-auto max-w-3xl">
           <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded mb-4 w-1/4"></div>
-            <div className="h-10 bg-gray-200 rounded mb-4"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
+            <div className="mb-4 h-8 w-1/4 rounded bg-gray-200"></div>
+            <div className="mb-4 h-10 rounded bg-gray-200"></div>
+            <div className="h-64 rounded bg-gray-200"></div>
           </div>
         </div>
       </div>
@@ -143,7 +150,7 @@ export default function EditPostPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-3xl mx-auto">
+      <div className="mx-auto max-w-3xl">
         <Button
           variant="ghost"
           onClick={handleBack}
@@ -170,16 +177,16 @@ export default function EditPostPage() {
                   disabled={isSubmitting}
                   maxLength={100}
                 />
-                <p className="text-xs text-muted-foreground">
-                  {title.length}/100
-                </p>
+                <p className="text-xs text-muted-foreground">{title.length}/100</p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="content">내용</Label>
                 <Textarea
                   id="content"
-                  placeholder="게시글 내용을 입력하세요&#10;&#10;이미지를 추가하려면:&#10;- 마크다운: ![설명](이미지URL)&#10;- HTML: <img src='이미지URL' />&#10;- 직접 URL: https://example.com/image.jpg"
+                  placeholder={
+                    "게시글 내용을 입력하세요\n\n이미지를 추가하려면:\n- 마크다운: ![설명](이미지URL)\n- HTML: <img src='이미지URL' />\n- 직접 URL: https://example.com/image.jpg"
+                  }
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   disabled={isSubmitting}
@@ -188,7 +195,7 @@ export default function EditPostPage() {
                 />
               </div>
 
-              <div className="flex gap-3 justify-end">
+              <div className="flex justify-end gap-3">
                 <Button
                   type="button"
                   variant="outline"

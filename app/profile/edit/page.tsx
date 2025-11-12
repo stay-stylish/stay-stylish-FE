@@ -1,61 +1,79 @@
-"use client"
+'use client';
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAuth } from "@/hooks/use-auth"
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function ProfileEditPage() {
-  const router = useRouter()
-  const { user, updateUser } = useAuth()
+  const router = useRouter();
+  const { user, updateUser } = useAuth();
+
   const [formData, setFormData] = useState({
-    nickname: "",
-    preferredStyle: "",
-    gender: "",
-  })
-  const [showCustomInput, setShowCustomInput] = useState(false)
+    nickname: '',
+    preferredStyle: '',
+    gender: '',
+  });
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     if (user) {
       setFormData({
-        nickname: user.nickname || "",
-        preferredStyle: user.preferredStyle || "",
-        gender: user.gender || "",
-      })
+        nickname: user.nickname || '',
+        preferredStyle: user.preferredStyle || '',
+        gender: user.gender || '',
+      });
     }
-  }, [user])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
     try {
-      setError("")
+      setError('');
       if (user) {
         await updateUser({
           ...user,
-          ...formData
-        })
+          ...formData,
+        });
       }
-      router.push("/profile")
+      router.push('/profile');
     } catch (err) {
-      console.error("Failed to update profile:", err)
-      setError(err instanceof Error ? err.message : "프로필 업데이트에 실패했습니다")
+      console.error('Failed to update profile:', err);
+      setError(
+        err instanceof Error ? err.message : '프로필 업데이트에 실패했습니다'
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
+
+  // '뒤로가기' 안정성 강화
+  const handleBack = () => {
+    if (window.history.length > 2) {
+      router.back();
+    } else {
+      router.push('/profile');
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="mx-auto max-w-2xl">
         <button
-          onClick={() => router.back()}
-          className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+          onClick={handleBack}
+          className="mb-6 flex items-center gap-2 text-slate-600 transition-colors hover:text-slate-900"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -68,21 +86,23 @@ export default function ProfileEditPage() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
           뒤로 가기
         </button>
 
-        <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
-          <h1 className="text-2xl font-bold text-slate-900 mb-6">프로필 수정</h1>
-          
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="mb-6 text-2xl font-bold text-slate-900">프로필 수정</h1>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="nickname">닉네임</Label>
               <Input
                 id="nickname"
                 value={formData.nickname}
-                onChange={(e) => setFormData(prev => ({ ...prev, nickname: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, nickname: e.target.value }))
+                }
                 placeholder="닉네임을 입력하세요"
                 required
               />
@@ -91,27 +111,36 @@ export default function ProfileEditPage() {
             <div className="space-y-2">
               <Label htmlFor="preferredStyle">선호 스타일</Label>
               <div className="flex flex-wrap gap-2">
-                {['캐주얼', '클래식', '스트릿', '스포티', '미니멀'].map((style) => (
-                  <Button
-                    key={style}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, preferredStyle: style }))
-                      setShowCustomInput(false)
-                    }}
-                    className={formData.preferredStyle === style && !showCustomInput ? 'bg-blue-50 border-blue-500 text-blue-700' : ''}
-                  >
-                    {style}
-                  </Button>
-                ))}
+                {['캐주얼', '클래식', '스트릿', '스포티', '미니멀'].map(
+                  (style) => (
+                    <Button
+                      key={style}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          preferredStyle: style,
+                        }));
+                        setShowCustomInput(false);
+                      }}
+                      className={
+                        formData.preferredStyle === style && !showCustomInput
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : ''
+                      }
+                    >
+                      {style}
+                    </Button>
+                  )
+                )}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setShowCustomInput(true)}
-                  className={showCustomInput ? 'bg-blue-50 border-blue-500 text-blue-700' : ''}
+                  className={showCustomInput ? 'border-blue-500 bg-blue-50 text-blue-700' : ''}
                 >
                   직접 입력
                 </Button>
@@ -120,7 +149,12 @@ export default function ProfileEditPage() {
                 <Input
                   id="preferredStyle"
                   value={formData.preferredStyle}
-                  onChange={(e) => setFormData(prev => ({ ...prev, preferredStyle: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      preferredStyle: e.target.value,
+                    }))
+                  }
                   placeholder="선호하는 스타일을 입력하세요"
                   className="mt-2"
                 />
@@ -131,7 +165,9 @@ export default function ProfileEditPage() {
               <Label htmlFor="gender">성별</Label>
               <Select
                 value={formData.gender}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, gender: value }))}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, gender: value }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="성별을 선택하세요" />
@@ -143,26 +179,24 @@ export default function ProfileEditPage() {
               </Select>
             </div>
 
-            {error && (
-              <div className="text-sm text-red-500 mt-4">{error}</div>
-            )}
+            {error && <div className="mt-4 text-sm text-red-500">{error}</div>}
 
             <div className="flex justify-end gap-4">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.back()}
+                onClick={handleBack}
                 disabled={isLoading}
               >
                 취소
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "저장 중..." : "저장하기"}
+                {isLoading ? '저장 중...' : '저장하기'}
               </Button>
             </div>
           </form>
         </div>
       </div>
     </main>
-  )
+  );
 }
