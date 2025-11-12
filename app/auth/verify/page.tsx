@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+// 1. useEffect, useState와 함께 useRef를 import 합니다.
+import { useEffect, useState, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { CheckCircle, AlertCircle, Loader } from "lucide-react"
@@ -11,8 +12,18 @@ export default function VerifyPage() {
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
     const [message, setMessage] = useState('')
 
+    // 2. 인증 요청이 이미 실행되었는지 추적하는 ref를 생성합니다.
+    const verifyFetched = useRef(false)
+
     useEffect(() => {
         const verifyEmail = async () => {
+            // 3. 이미 요청을 보냈다면(2번째 실행) 즉시 중단합니다.
+            if (verifyFetched.current) {
+                return
+            }
+            // 4. 요청을 보냈다고 플래그를 true로 설정합니다.
+            verifyFetched.current = true
+
             const token = searchParams.get('token')
 
             if (!token) {
@@ -28,7 +39,8 @@ export default function VerifyPage() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
-                    throw new Error(errorData.error || '인증에 실패했습니다')
+                    // 백엔드 에러 메시지(data.message)를 사용하도록 수정합니다.
+                    throw new Error(errorData.message || '인증에 실패했습니다')
                 }
 
                 setStatus('success')
@@ -44,8 +56,10 @@ export default function VerifyPage() {
                 setMessage(
                     err instanceof Error
                         ? err.message
+                        // 5. 백엔드에서 오는 "유효하지 않은 토큰" 메시지가 여기에 표시됩니다.
                         : '이메일 인증에 실패했습니다. 다시 시도해주세요.'
                 )
+                // 인증 실패 시 로그인 페이지가 아닌 회원가입 페이지로 보냅니다.
                 setTimeout(() => router.push('/signup'), 3000)
             }
         }
@@ -53,10 +67,12 @@ export default function VerifyPage() {
         verifyEmail()
     }, [searchParams, router])
 
+    // 6. 이 아래 JSX 렌더링(return) 부분은 전혀 수정되지 않았습니다.
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
             <Card className="w-full max-w-md">
                 <CardContent className="pt-12 text-center space-y-4">
+                    {/* ... (UI 부분은 동일하게 유지됩니다) ... */}
                     {status === 'loading' && (
                         <>
                             <div className="flex justify-center mb-4">
