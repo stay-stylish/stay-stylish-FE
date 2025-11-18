@@ -10,15 +10,19 @@ import { Heart, ArrowLeft, Share2, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface KakaoShare {
-  Link: {
+interface KakaoSDK {
+  isInitialized: () => boolean;
+  Share?: {
+    sendDefault: (options: any) => void;
+  };
+  Link?: {
     sendDefault: (options: any) => void;
   };
 }
 
 declare global {
   interface Window {
-    Kakao?: KakaoShare;
+    Kakao?: KakaoSDK;
   }
 }
 
@@ -33,42 +37,39 @@ interface PostDetail {
   updatedAt: string;
 }
 
-// Helper functions moved outside component to avoid re-creation
+// 이미지 URL 추출
 const extractImages = (content: string): string[] => {
   const images: string[] = [];
-  
-  // Markdown image pattern: ![alt](url)
+
   const markdownPattern = /!\[.*?\]\((https?:\/\/[^\s)]+)\)/g;
   let match;
   while ((match = markdownPattern.exec(content)) !== null) {
     images.push(match[1]);
   }
-  
-  // HTML img tag pattern: <img src="url">
+
   const htmlPattern = /<img[^>]+src=["']([^"']+)["']/gi;
   while ((match = htmlPattern.exec(content)) !== null) {
     images.push(match[1]);
   }
-  
-  // Direct URL pattern (http:// or https:// followed by image extension)
+
   const urlPattern = /https?:\/\/[^\s<]+\.(?:jpg|jpeg|png|gif|webp)/gi;
   while ((match = urlPattern.exec(content)) !== null) {
     if (!images.includes(match[0])) {
       images.push(match[0]);
     }
   }
-  
+
   return images;
 };
 
+// 텍스트 렌더링
 const renderContent = (content: string) => {
-  // Remove image markdown/HTML from text content
   let textContent = content
     .replace(/!\[.*?\]\(https?:\/\/[^\s)]+\)/g, '')
     .replace(/<img[^>]+>/gi, '')
     .replace(/https?:\/\/[^\s<]+\.(?:jpg|jpeg|png|gif|webp)/gi, '')
     .trim();
-  
+
   return textContent.split('\n').map((line, index) => (
     <p key={index} className="mb-2">
       {line}
@@ -81,6 +82,7 @@ export default function CommunityPostDetailPage() {
   const router = useRouter();
   const { getAccessToken, user } = useAuth();
   const { toast } = useToast();
+
   const [post, setPost] = useState<PostDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export default function CommunityPostDetailPage() {
       try {
         setIsLoading(true);
         const token = getAccessToken();
-        
+
         if (!token) {
           router.push('/login');
           return;
@@ -100,7 +102,7 @@ export default function CommunityPostDetailPage() {
 
         const response = await fetch(`/api/community/posts/${params.id}`, {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -109,13 +111,12 @@ export default function CommunityPostDetailPage() {
         }
 
         const result = await response.json();
-        console.log('Post detail response:', result);
-        
-        // 백엔드 ApiResponse 구조: { success, message, data: PostResponse }
         const postData = result.data || result;
         setPost(postData);
       } catch (err) {
-        setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
+        const message =
+          err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
+        setError(message);
         toast({
           title: '오류',
           description: err instanceof Error ? err.message : '게시글을 불러올 수 없습니다.',
@@ -135,156 +136,185 @@ export default function CommunityPostDetailPage() {
   const handleLike = async () => {
     try {
       const token = getAccessToken();
-      
+
       if (!token) {
         router.push('/login');
         return;
       }
 
-      // 낙관적 업데이트
       const wasLiked = isLiked;
-      setIsLiked(!isLiked);
-      if (post) {
-        setPost({
-          ...post,
-          likeCount: post.likeCount + (wasLiked ? -1 : 1),
-        });
-      }
 
-      // 백엔드 API 호출
+      // 낙관적 업데이트
+      setIsLiked(prev => !prev);
+      setPost(prev =>
+        prev
+          ? {
+              ...prev,
+              likeCount: prev.likeCount + (wasLiked ? -1 : 1),
+            }
+          : prev
+      );
+
       const response = await fetch(`/api/community/posts/${params.id}/like`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
         // 실패 시 롤백
         setIsLiked(wasLiked);
-        if (post) {
-          setPost({
-            ...post,
-            likeCount: post.likeCount + (wasLiked ? 1 : -1),
-          });
-        }
+        setPost(prev =>
+          prev
+            ? {
+                ...prev,
+                likeCount: prev.likeCount + (wasLiked ? 1 : -1),
+              }
+            : prev
+        );
         throw new Error('좋아요 처리에 실패했습니다.');
       }
 
       const result = await response.json();
       const likeData = result.data || result;
-      
-      // 백엔드 응답으로 최종 상태 업데이트
+
       setIsLiked(likeData.liked);
-      if (post) {
-        setPost({
-          ...post,
-          likeCount: likeData.likeCount,
-        });
-      }
+      setPost(prev =>
+        prev
+          ? {
+              ...prev,
+              likeCount: likeData.likeCount,
+            }
+          : prev
+      );
     } catch (err) {
       console.error('Like error:', err);
       toast({
         title: '오류',
-        description: err instanceof Error ? err.message : '좋아요 처리 중 오류가 발생했습니다.',
+        description:
+          err instanceof Error ? err.message : '좋아요 처리 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
     }
   };
 
-  const handleShare = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    try {
-      if (!post) return;
+const handleShare = async () => {
+  try {
+    if (!post) return;
 
-      const token = getAccessToken();
-      
-      if (!token) {
-        router.push('/login');
+    const token = getAccessToken();
+
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    const platform = 'KAKAO';
+    const shareUrl = window.location.href;
+
+    if (platform === 'KAKAO') {
+      const kakao = window.Kakao;
+
+      // 1. SDK / 초기화 체크
+      if (!kakao || !kakao.isInitialized()) {
+        console.error('Kakao SDK가 초기화되지 않았습니다.');
+        toast({
+          title: '공유 오류',
+          description: '카카오 공유 기능을 불러오는 데 실패했습니다. 잠시 후 다시 시도해 주세요.',
+          variant: 'destructive',
+        });
         return;
       }
 
-      const platform = 'KAKAO';
-      // 공유 URL 생성
-      const shareUrl = window.location.href;
-      
-      // 소셜 미디어 공유
-      if (platform === 'KAKAO') {
-        // 카카오톡 공유 (window.Kakao API 필요)
-        if (window.Kakao) {
-          window.Kakao.Link.sendDefault({
-            objectType: 'feed',
-            content: {
-              title: post.title,
-              description: post.content.substring(0, 100) + '...',
-              imageUrl: extractImages(post.content)[0] || '',
-              link: {
-                mobileWebUrl: shareUrl,
-                webUrl: shareUrl,
-              },
-            },
-            buttons: [
-              {
-                title: '자세히 보기',
-                link: {
-                  mobileWebUrl: shareUrl,
-                  webUrl: shareUrl,
-                },
-              },
-            ],
-          });
-        } else {
-          // 카카오톡 API가 없는 경우 URL 복사로 대체
-          await navigator.clipboard.writeText(shareUrl);
-          toast({
-            title: 'URL이 복사되었습니다',
-            description: '원하는 곳에 붙여넣어 공유하세요.',
-          });
-        }
+            // 2. Share 모듈 또는 Link 모듈 선택
+      const shareModule =
+        (kakao.Share && kakao.Share) ||
+        (kakao.Link && kakao.Link) ||
+        null;
+
+      if (!shareModule || typeof shareModule.sendDefault !== 'function') {
+        console.error('Kakao Share/Link 모듈을 사용할 수 없습니다.');
+        toast({
+          title: '공유 오류',
+          description: '카카오 공유 모듈을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          variant: 'destructive',
+        });
+        return;
       }
 
-      // 백엔드 API 호출하여 공유 수 증가
-      const response = await fetch(`/api/community/posts/${post.id}/share`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+      // 3. 실제 공유 호출
+      shareModule.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: post.title,
+          description: post.content.substring(0, 100) + '...',
+          imageUrl: extractImages(post.content)[0] || '',
+          link: {
+            mobileWebUrl: shareUrl,
+            webUrl: shareUrl,
+          },
         },
-        body: JSON.stringify({ platform }),
-      });
-
-      if (!response.ok) {
-        throw new Error('공유 처리에 실패했습니다.');
-      }
-
-      const result = await response.json();
-      const shareData = result.data || result;
-      
-      // 공유 수 업데이트
-      setPost(prev => prev ? {
-        ...prev,
-        shareCount: shareData.shareCount,
-      } : null);
-
-      toast({
-        title: '공유 완료',
-        description: '게시글이 공유되었습니다.',
-      });
-    } catch (err) {
-      console.error('Share error:', err);
-      toast({
-        title: '오류',
-        description: err instanceof Error ? err.message : '공유 처리 중 오류가 발생했습니다.',
-        variant: 'destructive',
+        buttons: [
+          {
+            title: '자세히 보기',
+            link: {
+              mobileWebUrl: shareUrl,
+              webUrl: shareUrl,
+            },
+          },
+        ],
       });
     }
-  };
+
+    // 4. 여기까지 왔으면 공유 함수는 정상 호출된 것 → share 카운트 API
+    const response = await fetch(`/api/community/posts/${post.id}/share`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ platform }),
+    });
+
+    if (!response.ok) {
+      throw new Error('공유 처리에 실패했습니다.');
+    }
+
+    const result = await response.json();
+    const shareData = result.data || result;
+
+    setPost(prev =>
+      prev
+        ? {
+            ...prev,
+            shareCount: shareData.shareCount,
+          }
+        : prev
+    );
+
+    toast({
+      title: '공유 완료',
+      description: '게시글이 공유되었습니다.',
+    });
+  } catch (err) {
+    console.error('Share error:', err);
+    toast({
+      title: '오류',
+      description:
+        err instanceof Error ? err.message : '공유 처리 중 오류가 발생했습니다.',
+      variant: 'destructive',
+    });
+  }
+};
 
   const handleBack = () => {
     router.push('/community');
   };
 
   const handleEdit = () => {
-    router.push(`/community/${post?.id}/edit`);
+    if (!post) return;
+    router.push(`/community/${post.id}/edit`);
   };
 
   const handleDelete = async () => {
@@ -295,7 +325,7 @@ export default function CommunityPostDetailPage() {
     try {
       setIsDeleting(true);
       const token = getAccessToken();
-      
+
       if (!token) {
         router.push('/login');
         return;
@@ -304,7 +334,7 @@ export default function CommunityPostDetailPage() {
       const response = await fetch(`/api/community/posts/${params.id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -322,7 +352,8 @@ export default function CommunityPostDetailPage() {
       console.error('Error deleting post:', err);
       toast({
         title: '오류',
-        description: err instanceof Error ? err.message : '게시글 삭제 중 오류가 발생했습니다.',
+        description:
+          err instanceof Error ? err.message : '게시글 삭제 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
     } finally {
@@ -330,20 +361,15 @@ export default function CommunityPostDetailPage() {
     }
   };
 
-  // 작성자 확인
   const isAuthor = user && post && user.nickname === post.authorNickname;
 
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
-          {/* Back Button Skeleton */}
           <Skeleton className="h-10 w-32 mb-4" />
-          
-          {/* Card Skeleton */}
           <Card>
             <CardHeader>
-              {/* Author Info Skeleton */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Skeleton className="w-10 h-10 rounded-full" />
@@ -353,23 +379,15 @@ export default function CommunityPostDetailPage() {
                   </div>
                 </div>
               </div>
-              
-              {/* Title Skeleton */}
               <Skeleton className="h-8 w-3/4 mb-4" />
             </CardHeader>
-            
             <CardContent className="space-y-4">
-              {/* Image Skeleton */}
               <Skeleton className="w-full aspect-square rounded-lg" />
-              
-              {/* Content Skeleton */}
               <div className="space-y-2">
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-3/4" />
               </div>
-              
-              {/* Action Buttons Skeleton */}
               <div className="flex items-center justify-between pt-4 border-t">
                 <Skeleton className="h-10 w-24" />
                 <Skeleton className="h-10 w-24" />
@@ -400,11 +418,7 @@ export default function CommunityPostDetailPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-3xl mx-auto">
-        <Button
-          variant="ghost"
-          onClick={handleBack}
-          className="mb-4"
-        >
+        <Button variant="ghost" onClick={handleBack} className="mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           목록으로
         </Button>
@@ -465,7 +479,7 @@ export default function CommunityPostDetailPage() {
                     src={images[0]}
                     alt="게시글 이미지"
                     className="w-full rounded-lg object-cover"
-                    onError={(e) => {
+                    onError={e => {
                       e.currentTarget.style.display = 'none';
                     }}
                   />
@@ -477,7 +491,7 @@ export default function CommunityPostDetailPage() {
                         src={img}
                         alt={`게시글 이미지 ${index + 1}`}
                         className="w-full h-64 object-cover rounded-lg"
-                        onError={(e) => {
+                        onError={e => {
                           e.currentTarget.style.display = 'none';
                         }}
                       />
@@ -487,9 +501,7 @@ export default function CommunityPostDetailPage() {
               </div>
             )}
 
-            <div className="prose max-w-none mb-6">
-              {renderContent(post.content)}
-            </div>
+            <div className="prose max-w-none mb-6">{renderContent(post.content)}</div>
 
             <div className="flex items-center gap-4 pt-4 border-t">
               <Button
@@ -498,9 +510,7 @@ export default function CommunityPostDetailPage() {
                 onClick={handleLike}
                 className="flex items-center gap-2"
               >
-                <Heart
-                  className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`}
-                />
+                <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
                 <span>{post.likeCount}</span>
               </Button>
 
@@ -517,7 +527,8 @@ export default function CommunityPostDetailPage() {
 
             {post.updatedAt !== post.createdAt && (
               <p className="text-xs text-muted-foreground mt-4">
-                수정됨: {new Date(post.updatedAt).toLocaleDateString('ko-KR', {
+                수정됨:{' '}
+                {new Date(post.updatedAt).toLocaleDateString('ko-KR', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
